@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>F1 Schedule Widget for Notion</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts - Inter & Titillium Web for F1 vibe -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Titillium+Web:ital,wght@0,600;0,700;1,700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            f1red: '#E10600',
+            f1dark: '#191919',
+            f1card: '#222222',
+            f1border: '#2A2A2A',
+            f1gray: '#8E8E93',
+            f1light: '#2F2F2F',
+            // Notion Light Mode Tokens
+            notionBg: '#FFFFFF',
+            notionCard: '#F7F6F3',
+            notionBorder: '#E9E9E7',
+            notionText: '#37352F',
+            notionMuted: '#787774'
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            f1: ['Titillium Web', 'sans-serif']
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar for Notion embedding */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #E10600;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #ff1a14;
+    }
+    
+    .glow-f1 {
+      box-shadow: 0 0 15px rgba(225, 6, 0, 0.35);
+    }
+
+    /* Notion Native Dark/Light Color Tokens */
+    .theme-light {
+      --bg-primary: #FFFFFF;
+      --bg-secondary: #F7F6F3;
+      --border-color: #E9E9E7;
+      --text-primary: #37352F;
+      --text-muted: #787774;
+    }
+    .theme-dark {
+      --bg-primary: #191919;
+      --bg-secondary: #222222;
+      --border-color: #2A2A2A;
+      --text-primary: #FFFFFF;
+      --text-muted: #999999;
+    }
+  </style>
+</head>
+<body class="bg-notionBg dark:bg-f1dark text-notionText dark:text-gray-100 font-sans antialiased p-2 sm:p-4 min-h-screen select-none transition-colors duration-200">
+
+  <!-- Main Container -->
+  <div class="max-w-md md:max-w-2xl mx-auto bg-notionBg dark:bg-f1dark rounded-xl border border-notionBorder dark:border-f1border overflow-hidden shadow-xl dark:shadow-2xl transition-colors duration-200">
+    
+    <!-- Header Bar -->
+    <div class="bg-notionCard dark:bg-f1card p-3 sm:p-4 border-b border-notionBorder dark:border-f1border flex flex-wrap items-center justify-between gap-2">
+      <div class="flex items-center space-x-2">
+        <span class="bg-f1red text-white text-xs font-bold px-2 py-1 rounded tracking-wider font-f1 uppercase shadow-sm">F1</span>
+        <h1 class="text-base sm:text-lg font-bold font-f1 tracking-wide uppercase text-notionText dark:text-white flex items-center gap-1.5">
+          Schedule <span id="season-year" class="text-f1red font-normal">2026</span>
+        </h1>
+      </div>
+
+      <div class="flex items-center space-x-2">
+        <!-- Theme Switcher (Auto / Light / Dark) -->
+        <div class="flex items-center bg-notionBg dark:bg-f1dark border border-notionBorder dark:border-f1border rounded-lg p-0.5 text-xs">
+          <button id="theme-auto" onclick="setThemeMode('auto')" class="px-2 py-1 rounded-md text-notionMuted dark:text-f1gray hover:text-f1red transition-all" title="Auto Sync">
+            <i class="fa-solid fa-desktop"></i>
+          </button>
+          <button id="theme-light" onclick="setThemeMode('light')" class="px-2 py-1 rounded-md text-notionMuted dark:text-f1gray hover:text-f1red transition-all" title="Light Mode">
+            <i class="fa-solid fa-sun"></i>
+          </button>
+          <button id="theme-dark" onclick="setThemeMode('dark')" class="px-2 py-1 rounded-md text-notionMuted dark:text-f1gray hover:text-f1red transition-all" title="Dark Mode">
+            <i class="fa-solid fa-moon"></i>
+          </button>
+        </div>
+
+        <!-- Timezone Selector -->
+        <select id="tz-select" class="bg-notionBg dark:bg-f1dark text-xs border border-notionBorder dark:border-f1border text-notionText dark:text-gray-300 rounded px-2 py-1.5 focus:outline-none focus:border-f1red cursor-pointer">
+          <option value="local">Local Time</option>
+          <option value="track">Track Time</option>
+          <option value="utc">UTC</option>
+        </select>
+
+        <!-- Refresh Button -->
+        <button id="refresh-btn" class="p-1.5 text-notionMuted dark:text-f1gray hover:text-notionText dark:hover:text-white rounded hover:bg-notionCard dark:hover:bg-f1light transition-colors" title="Refresh Schedule">
+          <i class="fa-solid fa-arrows-rotate text-xs"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Hero Section: Next / Current Race -->
+    <div id="hero-card" class="p-4 sm:p-5 bg-gradient-to-b from-notionCard via-notionBg to-notionBg dark:from-f1card dark:via-f1dark dark:to-f1dark border-b border-notionBorder dark:border-f1border relative overflow-hidden transition-colors">
+      <div class="absolute -right-8 -top-8 opacity-5 text-f1red font-f1 text-9xl font-extrabold italic pointer-events-none">
+        NEXT
+      </div>
+
+      <div class="relative z-10">
+        <div class="flex items-center justify-between mb-2">
+          <span id="hero-badge" class="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-f1red bg-f1red/10 border border-f1red/30 px-2.5 py-0.5 rounded-full">
+            <span class="w-2 h-2 rounded-full bg-f1red animate-ping"></span>
+            NEXT RACE • ROUND <span id="hero-round">--</span>
+          </span>
+          <span id="hero-country-code" class="text-xs text-notionMuted dark:text-f1gray font-mono uppercase">---</span>
+        </div>
+
+        <h2 id="hero-title" class="text-xl sm:text-2xl font-bold font-f1 tracking-wide text-notionText dark:text-white mb-1">
+          Loading Grand Prix...
+        </h2>
+        <p id="hero-circuit" class="text-xs text-notionMuted dark:text-f1gray mb-4 flex items-center gap-1">
+          <i class="fa-solid fa-location-dot text-f1red"></i> <span id="hero-circuit-name">--</span>
+        </p>
+
+        <!-- Countdown Timer -->
+        <div class="grid grid-cols-4 gap-2 bg-notionCard/80 dark:bg-f1dark/80 p-3 rounded-lg border border-notionBorder dark:border-f1border text-center mb-4 backdrop-blur shadow-sm">
+          <div>
+            <div id="cd-days" class="text-lg sm:text-2xl font-bold font-f1 text-notionText dark:text-white">00</div>
+            <div class="text-[10px] uppercase text-notionMuted dark:text-f1gray font-medium">Days</div>
+          </div>
+          <div>
+            <div id="cd-hours" class="text-lg sm:text-2xl font-bold font-f1 text-notionText dark:text-white">00</div>
+            <div class="text-[10px] uppercase text-notionMuted dark:text-f1gray font-medium">Hours</div>
+          </div>
+          <div>
+            <div id="cd-mins" class="text-lg sm:text-2xl font-bold font-f1 text-notionText dark:text-white">00</div>
+            <div class="text-[10px] uppercase text-notionMuted dark:text-f1gray font-medium">Mins</div>
+          </div>
+          <div>
+            <div id="cd-secs" class="text-lg sm:text-2xl font-bold font-f1 text-f1red">00</div>
+            <div class="text-[10px] uppercase text-notionMuted dark:text-f1gray font-medium">Secs</div>
+          </div>
+        </div>
+
+        <!-- Session Schedule Drawer -->
+        <div class="space-y-1.5 text-xs">
+          <div class="text-[11px] font-semibold text-notionMuted dark:text-f1gray uppercase tracking-wider mb-1 flex items-center justify-between">
+            <span>Weekend Sessions</span>
+            <span id="hero-date-range" class="normal-case text-notionMuted dark:text-gray-400">---</span>
+          </div>
+
+          <div id="sessions-list" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+            <!-- Dynamically Populated Sessions -->
+            <div class="bg-notionCard dark:bg-f1card/60 p-2 rounded flex justify-between items-center border border-notionBorder dark:border-f1border/50">
+              <span class="text-notionText dark:text-gray-300 font-medium">FP1</span>
+              <span class="text-notionMuted dark:text-gray-400 font-mono text-[11px]">Loading...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Tabs & Stats -->
+    <div class="px-3 pt-3 pb-2 bg-notionCard/50 dark:bg-f1card/40 flex items-center justify-between border-b border-notionBorder dark:border-f1border">
+      <div class="flex space-x-1 bg-notionBg dark:bg-f1dark p-1 rounded-lg border border-notionBorder dark:border-f1border">
+        <button id="filter-all" class="tab-btn active text-xs font-medium px-2.5 py-1 rounded-md transition-all bg-f1red text-white" onclick="setFilter('all')">
+          All
+        </button>
+        <button id="filter-upcoming" class="tab-btn text-xs font-medium px-2.5 py-1 rounded-md text-notionMuted dark:text-f1gray hover:text-notionText dark:hover:text-white transition-all" onclick="setFilter('upcoming')">
+          Upcoming
+        </button>
+        <button id="filter-completed" class="tab-btn text-xs font-medium px-2.5 py-1 rounded-md text-notionMuted dark:text-f1gray hover:text-notionText dark:hover:text-white transition-all" onclick="setFilter('completed')">
+          Completed
+        </button>
+      </div>
+
+      <div class="text-[11px] text-notionMuted dark:text-f1gray font-medium">
+        <span id="race-count-badge">0/0</span> Races
+      </div>
+    </div>
+
+    <!-- Scrollable Race List -->
+    <div id="race-list" class="divide-y divide-notionBorder dark:divide-f1border max-h-[380px] overflow-y-auto bg-notionBg dark:bg-f1dark">
+      <!-- Loading Placeholder -->
+      <div class="p-8 text-center text-notionMuted dark:text-f1gray text-xs flex flex-col items-center justify-center gap-2">
+        <i class="fa-solid fa-circle-notch fa-spin text-lg text-f1red"></i>
+        <span>Fetching live F1 schedule...</span>
+      </div>
+    </div>
+
+    <!-- Footer Status Bar -->
+    <div class="p-2.5 bg-notionCard dark:bg-f1card border-t border-notionBorder dark:border-f1border text-[10px] text-notionMuted dark:text-f1gray flex justify-between items-center px-4">
+      <div class="flex items-center gap-1.5">
+        <span id="api-status-dot" class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+        <span id="api-status-text">Ergast API Live</span>
+      </div>
+      <div class="italic font-f1">F1 Notion Widget</div>
+    </div>
+
+  </div>
+
+  <script>
+    // Country Flag Mapping
+    const countryFlags = {
+      'Australia': '🇦🇺', 'China': '🇨🇳', 'Japan': '🇯🇵', 'Bahrain': '🇧🇭',
+      'Saudi Arabia': '🇸🇦', 'USA': '🇺🇸', 'United States': '🇺🇸', 'Italy': '🇮🇹',
+      'Monaco': '🇲🇨', 'Canada': '🇨🇦', 'Spain': '🇪🇸', 'Austria': '🇦🇹',
+      'UK': '🇬🇧', 'Great Britain': '🇬🇧', 'Hungary': '🇭🇺', 'Belgium': '🇧🇪',
+      'Netherlands': '🇳🇱', 'Azerbaijan': '🇦🇿', 'Singapore': '🇸🇬', 'Mexico': '🇲🇽',
+      'Brazil': '🇧🇷', 'Las Vegas': '🇺🇸', 'Qatar': '🇶🇦', 'UAE': '🇦🇪', 'Abu Dhabi': '🇦🇪'
+    };
+
+    // Full 2026 F1 Schedule Fallback Data (Guarantees Instant Rendering in Preview)
+    const fallback2026Schedule = [
+      { round: "1", raceName: "Australian Grand Prix", date: "2026-03-08", time: "04:00:00Z", FirstPractice: { date: "2026-03-06", time: "01:30:00Z" }, SecondPractice: { date: "2026-03-06", time: "05:00:00Z" }, ThirdPractice: { date: "2026-03-07", time: "01:30:00Z" }, Qualifying: { date: "2026-03-07", time: "05:00:00Z" }, Circuit: { circuitName: "Albert Park Circuit", Location: { locality: "Melbourne", country: "Australia" } } },
+      { round: "2", raceName: "Chinese Grand Prix", date: "2026-03-22", time: "07:00:00Z", FirstPractice: { date: "2026-03-20", time: "03:30:00Z" }, Sprint: { date: "2026-03-21", time: "03:00:00Z" }, Qualifying: { date: "2026-03-21", time: "07:00:00Z" }, Circuit: { circuitName: "Shanghai International Circuit", Location: { locality: "Shanghai", country: "China" } } },
+      { round: "3", raceName: "Japanese Grand Prix", date: "2026-04-05", time: "05:00:00Z", FirstPractice: { date: "2026-04-03", time: "02:30:00Z" }, SecondPractice: { date: "2026-04-03", time: "06:00:00Z" }, ThirdPractice: { date: "2026-04-04", time: "02:30:00Z" }, Qualifying: { date: "2026-04-04", time: "06:00:00Z" }, Circuit: { circuitName: "Suzuka International Racing Course", Location: { locality: "Suzuka", country: "Japan" } } },
+      { round: "4", raceName: "Bahrain Grand Prix", date: "2026-04-12", time: "15:00:00Z", FirstPractice: { date: "2026-04-10", time: "11:30:00Z" }, SecondPractice: { date: "2026-04-10", time: "15:00:00Z" }, ThirdPractice: { date: "2026-04-11", time: "12:30:00Z" }, Qualifying: { date: "2026-04-11", time: "16:00:00Z" }, Circuit: { circuitName: "Bahrain International Circuit", Location: { locality: "Sakhir", country: "Bahrain" } } },
+      { round: "5", raceName: "Saudi Arabian Grand Prix", date: "2026-04-19", time: "17:00:00Z", FirstPractice: { date: "2026-04-17", time: "13:30:00Z" }, SecondPractice: { date: "2026-04-17", time: "17:00:00Z" }, ThirdPractice: { date: "2026-04-18", time: "13:30:00Z" }, Qualifying: { date: "2026-04-18", time: "17:00:00Z" }, Circuit: { circuitName: "Jeddah Corniche Circuit", Location: { locality: "Jeddah", country: "Saudi Arabia" } } },
+      { round: "6", raceName: "Miami Grand Prix", date: "2026-05-03", time: "20:00:00Z", FirstPractice: { date: "2026-05-01", time: "16:30:00Z" }, Sprint: { date: "2026-05-02", time: "16:00:00Z" }, Qualifying: { date: "2026-05-02", time: "20:00:00Z" }, Circuit: { circuitName: "Miami International Autodrome", Location: { locality: "Miami", country: "USA" } } },
+      { round: "7", raceName: "Emilia Romagna Grand Prix", date: "2026-05-17", time: "13:00:00Z", FirstPractice: { date: "2026-05-15", time: "11:30:00Z" }, SecondPractice: { date: "2026-05-15", time: "15:00:00Z" }, ThirdPractice: { date: "2026-05-16", time: "10:30:00Z" }, Qualifying: { date: "2026-05-16", time: "14:00:00Z" }, Circuit: { circuitName: "Autodromo Enzo e Dino Ferrari", Location: { locality: "Imola", country: "Italy" } } },
+      { round: "8", raceName: "Monaco Grand Prix", date: "2026-05-24", time: "13:00:00Z", FirstPractice: { date: "2026-05-22", time: "11:30:00Z" }, SecondPractice: { date: "2026-05-22", time: "15:00:00Z" }, ThirdPractice: { date: "2026-05-23", time: "10:30:00Z" }, Qualifying: { date: "2026-05-23", time: "14:00:00Z" }, Circuit: { circuitName: "Circuit de Monaco", Location: { locality: "Monte Carlo", country: "Monaco" } } },
+      { round: "9", raceName: "Spanish Grand Prix", date: "2026-06-07", time: "13:00:00Z", FirstPractice: { date: "2026-06-05", time: "11:30:00Z" }, SecondPractice: { date: "2026-06-05", time: "15:00:00Z" }, ThirdPractice: { date: "2026-06-06", time: "10:30:00Z" }, Qualifying: { date: "2026-06-06", time: "14:00:00Z" }, Circuit: { circuitName: "Circuit de Barcelona-Catalunya", Location: { locality: "Montmeló", country: "Spain" } } },
+      { round: "10", raceName: "Canadian Grand Prix", date: "2026-06-14", time: "18:00:00Z", FirstPractice: { date: "2026-06-12", time: "17:30:00Z" }, SecondPractice: { date: "2026-06-12", time: "21:00:00Z" }, ThirdPractice: { date: "2026-06-13", time: "16:30:00Z" }, Qualifying: { date: "2026-06-13", time: "20:00:00Z" }, Circuit: { circuitName: "Circuit Gilles Villeneuve", Location: { locality: "Montreal", country: "Canada" } } },
+      { round: "11", raceName: "Austrian Grand Prix", date: "2026-06-28", time: "13:00:00Z", FirstPractice: { date: "2026-06-26", time: "10:30:00Z" }, Sprint: { date: "2026-06-27", time: "10:00:00Z" }, Qualifying: { date: "2026-06-27", time: "14:00:00Z" }, Circuit: { circuitName: "Red Bull Ring", Location: { locality: "Spielberg", country: "Austria" } } },
+      { round: "12", raceName: "British Grand Prix", date: "2026-07-05", time: "14:00:00Z", FirstPractice: { date: "2026-07-03", time: "11:30:00Z" }, SecondPractice: { date: "2026-07-03", time: "15:00:00Z" }, ThirdPractice: { date: "2026-07-04", time: "10:30:00Z" }, Qualifying: { date: "2026-07-04", time: "14:00:00Z" }, Circuit: { circuitName: "Silverstone Circuit", Location: { locality: "Silverstone", country: "UK" } } },
+      { round: "13", raceName: "Hungarian Grand Prix", date: "2026-07-26", time: "13:00:00Z", FirstPractice: { date: "2026-07-24", time: "11:30:00Z" }, SecondPractice: { date: "2026-07-24", time: "15:00:00Z" }, ThirdPractice: { date: "2026-07-25", time: "10:30:00Z" }, Qualifying: { date: "2026-07-25", time: "14:00:00Z" }, Circuit: { circuitName: "Hungaroring", Location: { locality: "Budapest", country: "Hungary" } } },
+      { round: "14", raceName: "Belgian Grand Prix", date: "2026-08-02", time: "13:00:00Z", FirstPractice: { date: "2026-07-31", time: "11:30:00Z" }, SecondPractice: { date: "2026-07-31", time: "15:00:00Z" }, ThirdPractice: { date: "2026-08-01", time: "10:30:00Z" }, Qualifying: { date: "2026-08-01", time: "14:00:00Z" }, Circuit: { circuitName: "Circuit de Spa-Francorchamps", Location: { locality: "Stavelot", country: "Belgium" } } },
+      { round: "15", raceName: "Dutch Grand Prix", date: "2026-08-30", time: "13:00:00Z", FirstPractice: { date: "2026-08-28", time: "10:30:00Z" }, SecondPractice: { date: "2026-08-28", time: "14:00:00Z" }, ThirdPractice: { date: "2026-08-29", time: "09:30:00Z" }, Qualifying: { date: "2026-08-29", time: "13:00:00Z" }, Circuit: { circuitName: "Circuit Zandvoort", Location: { locality: "Zandvoort", country: "Netherlands" } } },
+      { round: "16", raceName: "Italian Grand Prix", date: "2026-09-06", time: "13:00:00Z", FirstPractice: { date: "2026-09-04", time: "11:30:00Z" }, SecondPractice: { date: "2026-09-04", time: "15:00:00Z" }, ThirdPractice: { date: "2026-09-05", time: "10:30:00Z" }, Qualifying: { date: "2026-09-05", time: "14:00:00Z" }, Circuit: { circuitName: "Autodromo Nazionale Monza", Location: { locality: "Monza", country: "Italy" } } },
+      { round: "17", raceName: "Azerbaijan Grand Prix", date: "2026-09-20", time: "11:00:00Z", FirstPractice: { date: "2026-09-18", time: "09:30:00Z" }, SecondPractice: { date: "2026-09-18", time: "13:00:00Z" }, ThirdPractice: { date: "2026-09-19", time: "08:30:00Z" }, Qualifying: { date: "2026-09-19", time: "12:00:00Z" }, Circuit: { circuitName: "Baku City Circuit", Location: { locality: "Baku", country: "Azerbaijan" } } },
+      { round: "18", raceName: "Singapore Grand Prix", date: "2026-10-04", time: "12:00:00Z", FirstPractice: { date: "2026-10-02", time: "09:30:00Z" }, SecondPractice: { date: "2026-10-02", time: "13:00:00Z" }, ThirdPractice: { date: "2026-10-03", time: "09:30:00Z" }, Qualifying: { date: "2026-10-03", time: "13:00:00Z" }, Circuit: { circuitName: "Marina Bay Street Circuit", Location: { locality: "Singapore", country: "Singapore" } } },
+      { round: "19", raceName: "United States Grand Prix", date: "2026-10-18", time: "19:00:00Z", FirstPractice: { date: "2026-10-16", time: "17:30:00Z" }, Sprint: { date: "2026-10-17", time: "18:00:00Z" }, Qualifying: { date: "2026-10-17", time: "22:00:00Z" }, Circuit: { circuitName: "Circuit of the Americas", Location: { locality: "Austin", country: "USA" } } },
+      { round: "20", raceName: "Mexico City Grand Prix", date: "2026-10-25", time: "20:00:00Z", FirstPractice: { date: "2026-10-23", time: "18:30:00Z" }, SecondPractice: { date: "2026-10-23", time: "22:00:00Z" }, ThirdPractice: { date: "2026-10-24", time: "17:30:00Z" }, Qualifying: { date: "2026-10-24", time: "21:00:00Z" }, Circuit: { circuitName: "Autódromo Hermanos Rodríguez", Location: { locality: "Mexico City", country: "Mexico" } } },
+      { round: "21", raceName: "São Paulo Grand Prix", date: "2026-11-08", time: "17:00:00Z", FirstPractice: { date: "2026-11-06", time: "14:30:00Z" }, Sprint: { date: "2026-11-07", time: "14:00:00Z" }, Qualifying: { date: "2026-11-07", time: "18:00:00Z" }, Circuit: { circuitName: "Autódromo José Carlos Pace", Location: { locality: "São Paulo", country: "Brazil" } } },
+      { round: "22", raceName: "Las Vegas Grand Prix", date: "2026-11-21", time: "06:00:00Z", FirstPractice: { date: "2026-11-19", time: "02:30:00Z" }, SecondPractice: { date: "2026-11-19", time: "06:00:00Z" }, ThirdPractice: { date: "2026-11-20", time: "02:30:00Z" }, Qualifying: { date: "2026-11-20", time: "06:00:00Z" }, Circuit: { circuitName: "Las Vegas Strip Circuit", Location: { locality: "Las Vegas", country: "Las Vegas" } } },
+      { round: "23", raceName: "Qatar Grand Prix", date: "2026-11-29", time: "16:00:00Z", FirstPractice: { date: "2026-11-27", time: "13:30:00Z" }, Sprint: { date: "2026-11-28", time: "14:00:00Z" }, Qualifying: { date: "2026-11-28", time: "18:00:00Z" }, Circuit: { circuitName: "Lusail International Circuit", Location: { locality: "Lusail", country: "Qatar" } } },
+      { round: "24", raceName: "Abu Dhabi Grand Prix", date: "2026-12-06", time: "13:00:00Z", FirstPractice: { date: "2026-12-04", time: "09:30:00Z" }, SecondPractice: { date: "2026-12-04", time: "13:00:00Z" }, ThirdPractice: { date: "2026-12-05", time: "10:30:00Z" }, Qualifying: { date: "2026-12-05", time: "14:00:00Z" }, Circuit: { circuitName: "Yas Marina Circuit", Location: { locality: "Abu Dhabi", country: "UAE" } } }
+    ];
+
+    // Configuration & State
+    let currentSeasonRaces = [];
+    let nextRaceIndex = -1;
+    let timerInterval = null;
+    let activeFilter = 'all'; 
+    let selectedTz = 'local'; 
+    let currentThemeMode = 'auto'; 
+
+    // Theme Management Functions
+    function initTheme() {
+      const savedTheme = localStorage.getItem('f1_notion_theme') || 'auto';
+      setThemeMode(savedTheme);
+
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+        if (currentThemeMode === 'auto') {
+          applyThemeClass(e.matches);
+        }
+      });
+    }
+
+    function setThemeMode(mode) {
+      currentThemeMode = mode;
+      localStorage.setItem('f1_notion_theme', mode);
+
+      ['auto', 'light', 'dark'].forEach(m => {
+        const btn = document.getElementById(`theme-${m}`);
+        if (btn) {
+          if (m === mode) {
+            btn.className = "px-2 py-1 rounded-md bg-f1red text-white shadow-sm font-semibold transition-all";
+          } else {
+            btn.className = "px-2 py-1 rounded-md text-notionMuted dark:text-f1gray hover:text-f1red transition-all";
+          }
+        }
+      });
+
+      if (mode === 'auto') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        applyThemeClass(prefersDark);
+      } else if (mode === 'dark') {
+        applyThemeClass(true);
+      } else {
+        applyThemeClass(false);
+      }
+    }
+
+    function applyThemeClass(isDark) {
+      if (isDark) {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+
+    // Fetch Live F1 Schedule from API
+    async function fetchSchedule(forceRefresh = false) {
+      const statusDot = document.getElementById('api-status-dot');
+      const statusText = document.getElementById('api-status-text');
+
+      statusText.textContent = "Updating...";
+      statusDot.className = "w-1.5 h-1.5 rounded-full bg-yellow-500 animate-ping";
+
+      try {
+        // Primary API endpoint (Jolpi mirror / Ergast API)
+        const response = await fetch('https://api.jolpi.ca/ergast/f1/current.json', { cache: 'no-cache' })
+          .catch(() => fetch('https://ergast.com/api/f1/current.json'));
+
+        if (!response.ok) throw new Error('API response failed');
+        
+        const data = await response.json();
+        const races = data?.MRData?.RaceTable?.Races;
+        const season = data?.MRData?.RaceTable?.season || "2026";
+
+        if (races && races.length > 0) {
+          currentSeasonRaces = races;
+          document.getElementById('season-year').textContent = season;
+          statusDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-500";
+          statusText.textContent = "Ergast API Live";
+        } else {
+          throw new Error('No race data returned');
+        }
+      } catch (err) {
+        console.warn('API fetch blocked or failed. Using embedded 2026 schedule data.', err);
+        currentSeasonRaces = fallback2026Schedule;
+        document.getElementById('season-year').textContent = "2026";
+        statusDot.className = "w-1.5 h-1.5 rounded-full bg-blue-500";
+        statusText.textContent = "2026 Schedule Active";
+      }
+
+      findNextRaceIndex();
+      renderWidget();
+    }
+
+    function findNextRaceIndex() {
+      const now = new Date();
+      
+      // Check if there's an ongoing race weekend or upcoming race
+      nextRaceIndex = currentSeasonRaces.findIndex(race => {
+        const fp1Date = race.FirstPractice ? parseUTCDateTime(race.FirstPractice.date, race.FirstPractice.time) : parseUTCDateTime(race.date, race.time);
+        const raceDate = parseUTCDateTime(race.date, race.time);
+        // Extend 3 hours after Grand Prix start as end of weekend
+        const weekendEnd = new Date(raceDate.getTime() + 3 * 60 * 60 * 1000);
+
+        return now <= weekendEnd;
+      });
+
+      // If all races are done for the season, default to last race
+      if (nextRaceIndex === -1 && currentSeasonRaces.length > 0) {
+        nextRaceIndex = currentSeasonRaces.length - 1;
+      }
+    }
+
+    function renderWidget() {
+      if (!currentSeasonRaces || currentSeasonRaces.length === 0) return;
+      const nextRace = currentSeasonRaces[nextRaceIndex] || currentSeasonRaces[0];
+      renderHero(nextRace);
+      renderList();
+    }
+
+    // Render Hero Card and Race List
+    // Initialize application
+    document.addEventListener('DOMContentLoaded', () => {
+      initTheme();
+      fetchSchedule();
+
+      document.getElementById('refresh-btn').addEventListener('click', () => {
+        fetchSchedule(true);
+      });
+
+      document.getElementById('tz-select').addEventListener('change', (e) => {
+        selectedTz = e.target.value;
+        renderWidget();
+      });
+    });
+
+      // Start Countdown Timer
+    // Render Hero Component with Countdown
+    function renderHero(race) {
+      if (!race) return;
+
+      const flag = countryFlags[race.Circuit?.Location?.country] || '🏎️';
+      document.getElementById('hero-round').textContent = race.round;
+      document.getElementById('hero-country-code').textContent = (race.Circuit?.Location?.country || '').substring(0, 3).toUpperCase();
+      document.getElementById('hero-title').textContent = `${flag} ${race.raceName}`;
+      document.getElementById('hero-circuit-name').textContent = `${race.Circuit?.circuitName}, ${race.Circuit?.Location?.locality}`;
+
+      // Date Range
+      const mainRaceDate = parseUTCDateTime(race.date, race.time);
+      document.getElementById('hero-date-range').textContent = formatDateRange(race);
+
+      // Render Sessions
+      const sessionsContainer = document.getElementById('sessions-list');
+      sessionsContainer.innerHTML = '';
+
+      const sessions = [
+        { name: 'FP1', data: race.FirstPractice },
+        { name: 'FP2', data: race.SecondPractice },
+        { name: 'FP3', data: race.ThirdPractice },
+        { name: 'Sprint', data: race.Sprint },
+        { name: 'Qualifying', data: race.Qualifying },
+        { name: 'Grand Prix', data: { date: race.date, time: race.time }, isMain: true }
+      ].filter(s => s.data);
+
+      sessions.forEach(s => {
+        const sessionDate = parseUTCDateTime(s.data.date, s.data.time);
+        const formattedTime = formatTime(sessionDate);
+
+        const sEl = document.createElement('div');
+        sEl.className = `bg-notionCard dark:bg-f1card/80 p-2 rounded flex justify-between items-center border ${s.isMain ? 'border-f1red/50 bg-f1red/5 dark:bg-f1red/10' : 'border-notionBorder dark:border-f1border/60'}`;
+        sEl.innerHTML = `
+          <div class="flex items-center gap-1.5">
+            <span class="font-semibold ${s.isMain ? 'text-f1red' : 'text-notionText dark:text-gray-200'}">${s.name}</span>
+            ${s.isMain ? '<span class="text-[9px] bg-f1red text-white font-bold px-1 rounded">RACE</span>' : ''}
+          </div>
+          <span class="text-notionMuted dark:text-gray-300 font-mono text-[11px]">${formattedTime}</span>
+        `;
+        sessionsContainer.appendChild(sEl);
+      });
+
+      // Start Countdown Timer
+      startCountdown(mainRaceDate);
+    }
+
+    // Render Main List
+    function renderList() {
+      const container = document.getElementById('race-list');
+      container.innerHTML = '';
+
+      let filteredRaces = currentSeasonRaces.filter((race, index) => {
+        const isCompleted = index < nextRaceIndex;
+        if (activeFilter === 'upcoming') return !isCompleted;
+        if (activeFilter === 'completed') return isCompleted;
+        return true;
+      });
+
+      document.getElementById('race-count-badge').textContent = `${filteredRaces.length}/${currentSeasonRaces.length}`;
+
+      if (filteredRaces.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-notionMuted dark:text-f1gray text-xs">
+            No races found for this filter.
+          </div>
+        `;
+        return;
+      }
+
+      filteredRaces.forEach((race) => {
+        const originalIndex = currentSeasonRaces.findIndex(r => r.round === race.round);
+        const isNext = originalIndex === nextRaceIndex;
+        const isCompleted = originalIndex < nextRaceIndex;
+
+        const raceDate = parseUTCDateTime(race.date, race.time);
+        const fp1Date = race.FirstPractice ? parseUTCDateTime(race.FirstPractice.date, race.FirstPractice.time) : raceDate;
+        const weekendEnd = new Date(raceDate.getTime() + 3 * 60 * 60 * 1000);
+        const now = new Date();
+        const isLive = now >= fp1Date && now <= weekendEnd;
+
+        const flag = countryFlags[race.Circuit?.Location?.country] || '🏁';
+
+        let statusBadge = '';
+        if (isLive) {
+          statusBadge = `<span class="text-[10px] bg-red-600 text-white border border-red-500 px-2 py-0.5 rounded font-bold animate-pulse flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-white"></span>LIVE</span>`;
+        } else if (isNext) {
+          statusBadge = `<span class="text-[10px] bg-f1red/20 text-f1red border border-f1red/40 px-2 py-0.5 rounded font-semibold animate-pulse">NEXT</span>`;
+        } else if (isCompleted) {
+          statusBadge = `<span class="text-[10px] bg-notionCard dark:bg-f1light text-notionMuted dark:text-f1gray px-2 py-0.5 rounded font-medium border border-notionBorder dark:border-transparent">DONE</span>`;
+        } else {
+          statusBadge = `<span class="text-[10px] bg-notionCard dark:bg-f1border text-notionText dark:text-gray-300 px-2 py-0.5 rounded font-medium border border-notionBorder dark:border-transparent">UPCOMING</span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = `p-3.5 hover:bg-notionCard/80 dark:hover:bg-f1card/50 transition-colors flex items-center justify-between cursor-pointer ${isLive ? 'bg-f1red/10 border-l-4 border-l-f1red glow-f1' : isNext ? 'bg-notionCard/60 dark:bg-f1card/40 border-l-4 border-l-f1red' : ''} ${isCompleted && !isLive ? 'opacity-65 hover:opacity-100' : ''}`;
+        
+        card.onclick = () => {
+          nextRaceIndex = originalIndex;
+          renderWidget();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        };
+
+        card.innerHTML = `
+          <div class="flex items-center space-x-3">
+            <div class="font-f1 text-sm font-bold w-6 text-notionMuted dark:text-f1gray">
+              R${race.round}
+            </div>
+            <div>
+              <div class="flex items-center gap-1.5 font-semibold text-sm text-notionText dark:text-white">
+                <span>${flag}</span>
+                <span class="hover:text-f1red transition-colors">${race.raceName}</span>
+              </div>
+              <div class="text-[11px] text-notionMuted dark:text-f1gray flex items-center gap-2 mt-0.5">
+                <span>${race.Circuit?.Location?.locality || race.Circuit?.circuitName}</span>
+                <span>•</span>
+                <span class="font-mono text-notionText dark:text-gray-300">${formatDateShort(raceDate)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end gap-1">
+            ${statusBadge}
+            <span class="text-[10px] font-mono text-notionMuted dark:text-f1gray">${formatTime(raceDate)}</span>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    // Countdown Logic
+    function startCountdown(targetDate) {
+      if (timerInterval) clearInterval(timerInterval);
+
+      function update() {
+        const now = new Date();
+        const diff = targetDate - now;
+
+        const heroBadge = document.getElementById('hero-badge');
+
+        if (diff <= 0) {
+          document.getElementById('cd-days').textContent = '00';
+          document.getElementById('cd-hours').textContent = '00';
+          document.getElementById('cd-mins').textContent = '00';
+          document.getElementById('cd-secs').textContent = '00';
+          if (heroBadge) {
+            heroBadge.className = "inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-white bg-f1red border border-red-500 px-2.5 py-0.5 rounded-full shadow-sm animate-pulse";
+            heroBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-white animate-ping"></span> LIVE NOW • GRAND PRIX`;
+          }
+          return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const mins = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const secs = Math.floor((diff % (1000 * 60)) / 1000);
+
+        document.getElementById('cd-days').textContent = String(days).padStart(2, '0');
+        document.getElementById('cd-hours').textContent = String(hours).padStart(2, '0');
+        document.getElementById('cd-mins').textContent = String(mins).padStart(2, '0');
+        document.getElementById('cd-secs').textContent = String(secs).padStart(2, '0');
+      }
+
+      update();
+      timerInterval = setInterval(update, 1000);
+    }
+
+    // Filter switching
+    function setFilter(filter) {
+      activeFilter = filter;
+      ['all', 'upcoming', 'completed'].forEach(f => {
+        const btn = document.getElementById(`filter-${f}`);
+        if (f === filter) {
+          btn.className = "tab-btn text-xs font-medium px-2.5 py-1 rounded-md transition-all bg-f1red text-white";
+        } else {
+          btn.className = "tab-btn text-xs font-medium px-2.5 py-1 rounded-md text-f1gray hover:text-white transition-all";
+        }
+      });
+      renderList();
+    }
+
+    // Helper functions for Date Parsing and Formatting
+    function parseUTCDateTime(dateStr, timeStr) {
+      if (!timeStr) timeStr = "12:00:00Z";
+      const cleanTime = timeStr.endsWith('Z') ? timeStr : timeStr + 'Z';
+      return new Date(`${dateStr}T${cleanTime}`);
+    }
+
+    function formatTime(dateObj) {
+      if (selectedTz === 'utc') {
+        return dateObj.toLocaleTimeString('en-US', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false }) + ' UTC';
+      }
+      return dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    }
+
+    function formatDateShort(dateObj) {
+      return dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    function formatDateRange(race) {
+      const mainDate = parseUTCDateTime(race.date, race.time);
+      const firstDate = race.FirstPractice ? parseUTCDateTime(race.FirstPractice.date, race.FirstPractice.time) : new Date(mainDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+      
+      const options = { month: 'short', day: 'numeric' };
+      return `${firstDate.toLocaleDateString('en-US', options)} - ${mainDate.toLocaleDateString('en-US', options)}`;
+    }
+  </script>
+</body>
+</html>
